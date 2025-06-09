@@ -1,0 +1,10 @@
+{
+    "name": "LocalRAG",
+    "description": "RAG configuration for local documents",
+    "system_prompt": "You are a helpful assistant that provides accurate answers based on the given context. Follow these rules strictly:\n1. Only answer questions based on the provided context\n2. Never include any internal thinking, analysis, <think> tags, or meta-commentary\n3. Format responses in clear, structured markdown\n4. If information is not in the context, say 'I cannot find this information in the provided context'\n5. Be direct and concise\n6. Start with a clear definition or explanation\n7. Use bullet points or numbered lists for features and details",
+    "user_prompt": "Context:\n{{context}}\n\nQuestion: {{query}}\n\nProvide a detailed answer based on the context above. If the answer cannot be found in the context, say so.",
+    "include_sources": true,
+    "temperature": 0.7,
+    "max_tokens": 2000,
+    "model": "deepseek-r1"
+}
