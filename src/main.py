@@ -103,6 +103,9 @@ async def upload_document(file: UploadFile = File(...)):
                 detail=f"Unsupported file format. Supported formats: {', '.join(document_processor.get_supported_formats())}"
             )
 
+        # Create documents directory if it doesn't exist
+        os.makedirs(DOCUMENTS_DIR, exist_ok=True)
+
         # Save the uploaded file to documents directory
         file_path = os.path.join(DOCUMENTS_DIR, file.filename)
         content = await file.read()
@@ -110,18 +113,24 @@ async def upload_document(file: UploadFile = File(...)):
             buffer.write(content)
         
         # Process the document
-        documents = document_processor.load_and_split_document(file_path)
-        embeddings = document_processor.create_embeddings([doc.page_content for doc in documents])
-        
-        # Generate unique IDs for the documents
-        ids = [str(uuid.uuid4()) for _ in documents]
-        
+        docs = document_processor.process_document(file_path)
+        if not docs:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process document {file.filename}"
+            )
+
+        # Create embeddings for each document
+        for doc in docs:
+            embedding = document_processor.create_embeddings([doc['content']])[0]
+            doc['embedding'] = embedding
+            
         # Store in vector database
-        vector_store.add_documents(documents, embeddings, ids)
+        vector_store.add_documents(docs)
         
         return {
             "message": f"Document {file.filename} processed and stored successfully",
-            "chunks": len(documents)
+            "chunks": len(docs)
         }
     except Exception as e:
         if isinstance(e, HTTPException):

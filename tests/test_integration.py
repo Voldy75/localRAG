@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch, MagicMock
 from src.document_processor import DocumentProcessor
 from src.vector_store import VectorStore
 from src.llm_service import LLMService
@@ -18,8 +19,14 @@ class TestIntegration(unittest.TestCase):
         # Clean up temporary directory
         shutil.rmtree(self.test_dir)
 
-    def test_full_rag_pipeline(self):
+    @patch('src.llm_service.Ollama')
+    def test_full_rag_pipeline(self, mock_ollama):
         """Test the complete RAG pipeline from document processing to response generation"""
+        # Setup mock Ollama
+        mock_instance = MagicMock()
+        mock_instance.invoke.return_value = "This is a test response about RAG"
+        mock_ollama.return_value = mock_instance
+
         # 1. Create test document
         test_doc = os.path.join(self.test_dir, 'test.txt')
         test_content = """
@@ -35,8 +42,11 @@ class TestIntegration(unittest.TestCase):
         self.assertIsNotNone(processed_docs)
 
         # 3. Create embeddings and store in vector store
-        for doc in processed_docs if isinstance(processed_docs, list) else [processed_docs]:
+        for doc in processed_docs:
+            # Create embedding for the document
             embedding = self.doc_processor.create_embeddings([doc['content']])[0]
+            # Add embedding to the document
+            doc['embedding'] = embedding
             doc['embedding'] = embedding
             self.vector_store.add_documents([doc])
 

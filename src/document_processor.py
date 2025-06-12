@@ -1,5 +1,6 @@
 from typing import List, Dict
 import os
+import logging
 from datetime import datetime
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -74,3 +75,36 @@ class DocumentProcessor:
     def create_embeddings(self, texts: List[str]):
         """Create embeddings for a list of texts."""
         return self.embeddings.embed_documents(texts)
+
+    def is_supported_file(self, file_path: str) -> bool:
+        """Check if the file format is supported."""
+        file_extension = os.path.splitext(file_path)[1].lower()
+        return file_extension in self.supported_formats
+
+    def process_document(self, file_path: str) -> List[Dict]:
+        """Process a single document and return its content and metadata."""
+        try:
+            # Check if file exists and is supported
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"File not found: {file_path}")
+            
+            if not self.is_supported_file(file_path):
+                raise ValueError(f"Unsupported file format: {os.path.splitext(file_path)[1]}")
+
+            # Load and split the document
+            documents = self.load_and_split_document(file_path)
+            if not documents:
+                return None
+
+            # Convert Document objects to dictionaries
+            processed_docs = []
+            for doc in documents:
+                processed_docs.append({
+                    'content': doc.page_content,
+                    'metadata': doc.metadata
+                })
+
+            return processed_docs
+        except Exception as e:
+            logging.error(f"Error processing document {file_path}: {str(e)}")
+            return None

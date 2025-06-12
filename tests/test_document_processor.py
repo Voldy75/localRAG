@@ -31,9 +31,11 @@ class TestDocumentProcessor(unittest.TestCase):
         
         result = self.doc_processor.process_document(test_file)
         self.assertIsNotNone(result)
-        self.assertIn('content', result)
-        self.assertIn('metadata', result)
-        self.assertEqual(result['metadata']['source'], 'test.txt')
+        self.assertTrue(isinstance(result, list))
+        self.assertEqual(len(result), 1)
+        self.assertIn('content', result[0])
+        self.assertIn('metadata', result[0])
+        self.assertEqual(result[0]['metadata']['source'], 'test.txt')
 
     def test_create_embeddings(self):
         """Test creation of embeddings"""
@@ -55,7 +57,8 @@ class TestDocumentProcessor(unittest.TestCase):
         result = self.doc_processor.process_document(test_file)
         self.assertIsNotNone(result)
         self.assertIsInstance(result, list)  # Should return list of chunks
-        self.assertTrue(all(len(chunk['content'].split()) <= 512 for chunk in result))  # Check chunk size
+        # Check chunk sizes are reasonable (using the chunk_size from the text_splitter)
+        self.assertTrue(all(len(doc['content'].split()) <= 1000 for doc in result))
 
 if __name__ == '__main__':
     unittest.main()

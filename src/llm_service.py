@@ -2,6 +2,7 @@ from langchain_community.llms import Ollama
 from typing import List
 import os
 import logging
+import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -19,30 +20,27 @@ class LLMService:
         except Exception as e:
             logger.error(f"Failed to initialize Ollama: {str(e)}")
             raise
-    
+
+    def _create_prompt(self, query: str, context: List[str]) -> str:
+        """Create a prompt combining the context and query."""
+        context_str = "\n".join(context)
+        return f"""Based on the following context, answer the question.
+Context:
+{context_str}
+
+Question: {query}
+Answer:"""
+
     def generate_response(self, query: str, context: List[str], temperature: float = 0.7) -> str:
         """Generate a response using the LLM with provided context."""
         try:
             prompt = self._create_prompt(query, context)
             logger.info(f"Generating response for query with temperature {temperature}")
-            # Using invoke instead of predict as per langchain 0.1.7+ recommendations
-            return self.llm.invoke(prompt, temperature=temperature)
+            response = self.llm.invoke(
+                prompt,
+                temperature=temperature
+            )
+            return response
         except Exception as e:
             logger.error(f"Error generating response: {str(e)}")
             raise
-    
-    def _create_prompt(self, query: str, context: List[str]) -> str:
-        """Create a prompt combining the context and query."""
-        context_str = "\n".join(context)
-        return f"""You are a helpful assistant that provides accurate answers based only on the given context.
-        Rules:
-        1. Never include any internal thinking, analysis, or <think> tags
-        2. If information is not in the context, say so clearly
-        3. Format responses in clear, structured markdown
-        4. Be direct and concise
-        
-        Context:
-        {context_str}
-        
-        Question: {query}
-        Answer: """

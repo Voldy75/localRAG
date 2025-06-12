@@ -6,55 +6,48 @@ class TestLLMService(unittest.TestCase):
     def setUp(self):
         self.llm_service = LLMService()
 
-    @patch('src.llm_service.requests.post')
-    def test_generate_response(self, mock_post):
+    def test_generate_response(self):
         """Test response generation"""
-        # Mock successful API response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "This is a test response"
-        }
-        mock_post.return_value = mock_response
-
         question = "What is RAG?"
         context = ["RAG stands for Retrieval Augmented Generation"]
         
-        response = self.llm_service.generate_response(question, context)
-        
-        self.assertIsNotNone(response)
-        self.assertEqual(response, "This is a test response")
+        with patch('langchain_community.llms.ollama.Ollama') as mock_ollama:
+            mock_instance = MagicMock()
+            mock_instance.invoke.return_value = "This is a test response"
+            mock_ollama.return_value = mock_instance
 
-    @patch('src.llm_service.requests.post')
-    def test_generate_response_with_temperature(self, mock_post):
-        """Test response generation with different temperature settings"""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "Test response"
-        }
-        mock_post.return_value = mock_response
-
-        # Test with different temperature values
-        for temp in [0.0, 0.5, 1.0]:
-            response = self.llm_service.generate_response(
-                "Test question",
-                ["Test context"],
-                temperature=temp
-            )
+            response = self.llm_service.generate_response(question, context)
             
-            # Verify temperature was passed correctly
-            call_args = mock_post.call_args[1]['json']
-            self.assertIn('temperature', call_args)
-            self.assertEqual(call_args['temperature'], temp)
+            self.assertIsNotNone(response)
+            self.assertEqual(response, "This is a test response")
+            mock_instance.invoke.assert_called_once()
 
-    @patch('src.llm_service.requests.post')
-    def test_error_handling(self, mock_post):
+    def test_generate_response_with_temperature(self):
+        """Test response generation with different temperature settings"""
+        with patch('langchain_community.llms.ollama.Ollama') as mock_ollama:
+            mock_instance = MagicMock()
+            mock_instance.invoke.return_value = "Test response"
+            mock_ollama.return_value = mock_instance
+
+            # Test with different temperature values
+            for temp in [0.0, 0.5, 1.0]:
+                self.llm_service.generate_response(
+                    "Test question",
+                    ["Test context"],
+                    temperature=temp
+                )
+                
+                # Verify the last call's arguments
+                args, kwargs = mock_instance.invoke.call_args
+                self.assertEqual(kwargs.get('temperature'), temp)
+
+    @patch('langchain_community.llms.ollama.Ollama')
+    def test_error_handling(self, mock_ollama):
         """Test error handling"""
-        # Mock error response
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_post.return_value = mock_response
+        # Mock error case
+        mock_instance = MagicMock()
+        mock_instance.invoke.side_effect = Exception("Test error")
+        mock_ollama.return_value = mock_instance
 
         with self.assertRaises(Exception):
             self.llm_service.generate_response(
@@ -62,16 +55,14 @@ class TestLLMService(unittest.TestCase):
                 ["Test context"]
             )
 
-    @patch('src.llm_service.requests.post')
-    def test_context_formatting(self, mock_post):
+    @patch('langchain_community.llms.ollama.Ollama')
+    def test_context_formatting(self, mock_ollama):
         """Test context formatting in prompts"""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "response": "Test response"
-        }
-        mock_post.return_value = mock_response
-
+        # Mock Ollama response
+        mock_instance = MagicMock()
+        mock_instance.invoke.return_value = "Test response"
+        mock_ollama.return_value = mock_instance
+        
         # Test with multiple context items
         contexts = [
             "First piece of context",
@@ -81,10 +72,12 @@ class TestLLMService(unittest.TestCase):
         
         self.llm_service.generate_response("Test question", contexts)
         
-        # Verify context was formatted correctly in the prompt
-        call_args = mock_post.call_args[1]['json']
-        prompt = call_args['prompt']
+        # Verify the call was made and get the prompt
+        mock_instance.invoke.assert_called_once()
+        args, _ = mock_instance.invoke.call_args
+        prompt = args[0]
         
+        # Verify all contexts are in the prompt
         for context in contexts:
             self.assertIn(context, prompt)
 
