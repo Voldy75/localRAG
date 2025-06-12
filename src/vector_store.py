@@ -48,6 +48,65 @@ class VectorStore:
         """Search for similar documents using the query embedding."""
         if not self.embeddings:
             return {'documents': [], 'distances': [], 'ids': []}
+
+        # Convert query embedding to numpy array
+        query_vector = np.array(query_embedding)
+        
+        # Calculate cosine similarities
+        similarities = []
+        for doc_vector in self.embeddings:
+            # Normalize vectors
+            query_norm = np.linalg.norm(query_vector)
+            doc_norm = np.linalg.norm(doc_vector)
+            
+            if query_norm == 0 or doc_norm == 0:
+                similarities.append(0)
+                continue
+            
+            # Calculate cosine similarity
+            similarity = np.dot(query_vector, doc_vector) / (query_norm * doc_norm)
+            similarities.append(similarity)
+        
+        # Get top N results with similarity threshold
+        threshold = 0.3  # Minimum similarity threshold
+        top_indices = []
+        top_similarities = []
+        
+        # Sort indices by similarity
+        sorted_indices = np.argsort(similarities)[::-1]
+        
+        # Filter by threshold and get top N
+        for idx in sorted_indices:
+            if similarities[idx] >= threshold and len(top_indices) < n_results:
+                top_indices.append(idx)
+                top_similarities.append(similarities[idx])
+        
+        if not top_indices:
+            return {'documents': [], 'distances': [], 'ids': []}
+            
+        return {
+            'documents': [self.documents[i] for i in top_indices],
+            'distances': [float(s) for s in top_similarities],  # Convert to float for JSON serialization
+            'ids': [self.ids[i] for i in top_indices]
+        }
+            
+        # Convert query embedding to numpy array
+        query_vector = np.array(query_embedding)
+        
+        # Calculate cosine similarities
+        similarities = [
+            np.dot(query_vector, doc_vector) / (np.linalg.norm(query_vector) * np.linalg.norm(doc_vector))
+            for doc_vector in self.embeddings
+        ]
+        
+        # Get top N results
+        top_indices = np.argsort(similarities)[-n_results:][::-1]
+        
+        return {
+            'documents': [self.documents[i] for i in top_indices],
+            'distances': [similarities[i] for i in top_indices],
+            'ids': [self.ids[i] for i in top_indices]
+        }
         
         query_embedding = np.array(query_embedding).reshape(1, -1)
         embeddings_array = np.array(self.embeddings)

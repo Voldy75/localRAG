@@ -42,17 +42,33 @@ class DocumentProcessor:
         loader = loader_class(file_path)
         documents = loader.load()
         
-        # Add metadata
+        # Clean and prepare the documents
+        cleaned_documents = []
         for doc in documents:
+            # Ensure we have a string content
+            if not isinstance(doc.page_content, str):
+                continue
+                
+            # Clean up the content
+            content = doc.page_content.strip()
+            if not content:
+                continue
+                
+            # Add metadata
             doc.metadata.update({
-                "source": file_path,
+                "source": os.path.basename(file_path),  # Use just the filename for cleaner output
                 "file_type": file_extension,
                 "processed_at": datetime.utcnow().isoformat(),
-                "file_name": os.path.basename(file_path)
+                "file_name": os.path.basename(file_path),
+                "chunk_id": len(cleaned_documents)  # Add chunk ID for reference
             })
+            cleaned_documents.append(doc)
         
-        # Split documents
-        split_docs = self.text_splitter.split_documents(documents)
+        # Split documents if we have any clean documents
+        if not cleaned_documents:
+            return []
+            
+        split_docs = self.text_splitter.split_documents(cleaned_documents)
         return split_docs
 
     def create_embeddings(self, texts: List[str]):

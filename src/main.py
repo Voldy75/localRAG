@@ -2,7 +2,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import uuid
 import uvicorn
 import os
@@ -30,6 +30,28 @@ llm_service = LLMService()
 
 # Constants
 DOCUMENTS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "documents")
+
+class OpenAIMessage(BaseModel):
+    role: str
+    content: str
+
+class OpenAIRequest(BaseModel):
+    messages: List[Dict[str, str]]
+    model: Optional[str] = "deepseek-r1"
+    temperature: Optional[float] = 0.7
+
+class OpenAIChoice(BaseModel):
+    message: Dict[str, str]
+    finish_reason: str = "stop"
+    index: int = 0
+
+class OpenAIResponse(BaseModel):
+    id: str
+    object: str = "chat.completion"
+    created: int
+    model: str
+    choices: List[OpenAIChoice]
+    usage: Dict[str, int]
 
 class Query(BaseModel):
     question: str
@@ -175,8 +197,8 @@ async def query(query: Query):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/v1/chat/completions")
-async def chat_completion(request: CompletionRequest):
-    """OpenAI-compatible chat completion endpoint."""
+async def chat_completions(request: OpenAIRequest):
+    """OpenAI-compatible chat completion endpoint for RAG integration."""
     try:
         # Extract the last user message
         user_message = next(
@@ -196,31 +218,54 @@ async def chat_completion(request: CompletionRequest):
         if not results["documents"]:
             response_text = "I don't have enough context to answer your question. Please try uploading relevant documents first."
         else:
-            # Generate response using LLM
-            response_text = llm_service.generate_response(
-                user_message,
-                results["documents"][0],
-                temperature=request.temperature
-            )
+            # Generate response using LLM with all relevant context
+            context = []
+            sources = set()
+            
+            for doc in results["documents"]:
+                # Extract content and metadata
+                content = doc["content"]
+                metadata = doc.get("metadata", {})
+                source = metadata.get("source", "unknown source")
+                similarity = results["distances"][results["documents"].index(doc)]
+                
+                # Only include content above similarity threshold
+                if similarity >= 0.3:
+                    context.append(f"Content from {source}:\n{content}")
+                    sources.add(source)
+            
+            if not context:
+                response_text = "I cannot find relevant information in the provided documents to answer your question."
+            else:
+                response_text = llm_service.generate_response(
+                    user_message,
+                    context,
+                    temperature=request.temperature or 0.7
+                )
+                
+                # Add source citations
+                if sources:
+                    response_text += f"\n\nSources: {', '.join(sources)}"
         
-        # Format response in OpenAI-compatible format
-        source_docs = [doc.get("metadata", {}).get("source") for doc in results["documents"]]
-        sources = f"\n\nSources: {', '.join(source_docs)}" if source_docs else ""
+        # Add source citations
+        sources = [doc.get("metadata", {}).get("source") for doc in results["documents"]]
+        if sources:
+            response_text += f"\n\nSources: {', '.join(sources)}"
         
-        return {
-            "id": str(uuid.uuid4()),
-            "object": "chat.completion",
-            "created": int(datetime.now().timestamp()),
-            "model": request.model,
-            "choices": [{
-                "index": 0,
+        return OpenAIResponse(
+            id=str(uuid.uuid4()),
+            created=int(datetime.now().timestamp()),
+            model=request.model,
+            choices=[{
                 "message": {
                     "role": "assistant",
-                    "content": response_text + sources
+                    "content": response_text
                 },
-                "finish_reason": "stop"
-            }]
-        }
+                "finish_reason": "stop",
+                "index": 0
+            }],
+            usage={"total_tokens": 0}  # Placeholder as we don't track token usage
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -118,10 +118,7 @@ curl -X POST -F "file=@path/to/your/document.txt" http://localhost:8000/upload
 
 ### 3. Querying the System
 
-Call the required command: 
-curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d '{"question": "What is BBPS and what are its key features?", "temperature": 0.7}'
-
-Once your documents are processed, you can use the OpenWebUI interface to query your documents:
+Once your documents are processed, you can use the OpenWebUI interface to query your documents directly:
 
 1. Open http://localhost:3000 in your browser
 2. Login with default credentials (if prompted)
@@ -142,3 +139,87 @@ Once your documents are processed, you can use the OpenWebUI interface to query 
    - Click on the source to see the relevant document section
 
 Note: The traditional API endpoints are still available for programmatic access, but the OpenWebUI interface provides a more user-friendly experience.
+
+## Testing Requirements
+
+The system includes a comprehensive test suite to ensure all components work correctly. Before making any changes to the system, all tests must pass.
+
+### Test Structure
+
+1. Unit Tests:
+   - `test_document_processor.py`: Tests document processing, embedding creation, and document splitting
+   - `test_vector_store.py`: Tests vector storage, similarity search, and persistence
+   - `test_llm_service.py`: Tests LLM integration, response generation, and error handling
+   - `test_api.py`: Tests all API endpoints and error handling
+
+2. Integration Tests:
+   - `test_integration.py`: Tests full RAG pipeline, multiple document types, and error recovery
+
+### Running Tests
+
+1. Install test dependencies:
+```bash
+pip install -r tests/requirements-test.txt
+```
+
+2. Run the test suite:
+```bash
+./run_tests.sh
+```
+
+The test runner will:
+- Execute all unit and integration tests
+- Generate a coverage report
+- Display results in the terminal
+- Create an HTML coverage report in `coverage_report/`
+
+### Test Coverage
+
+The test suite verifies:
+1. Document Processing:
+   - File type validation
+   - Content extraction
+   - Document splitting
+   - Embedding generation
+
+2. Vector Storage:
+   - Document indexing
+   - Similarity search
+   - Persistence
+   - Threshold filtering
+
+3. LLM Integration:
+   - Response generation
+   - Context handling
+   - Temperature settings
+   - Error handling
+
+4. API Endpoints:
+   - Document upload
+   - Document processing
+   - Query handling
+   - Error responses
+
+5. Integration:
+   - Full RAG pipeline
+   - Multi-document handling
+   - System recovery
+   - Large document processing
+
+### Required Test Pass Criteria
+
+Before deploying any changes:
+1. All unit tests must pass
+2. All integration tests must pass
+3. Code coverage should meet minimum thresholds:
+   - Overall coverage: 80%
+   - Critical components (document_processor.py, vector_store.py): 90%
+   - API endpoints: 100%
+
+### Adding New Tests
+
+When adding new features:
+1. Create corresponding unit tests
+2. Update integration tests if needed
+3. Verify coverage requirements are met
+4. Run the full test suite before committing changes
