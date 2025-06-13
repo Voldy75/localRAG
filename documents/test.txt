@@ -1,1 +1,1 @@
-RAG is a Retrieval Augmented Generation system
+This is a test document

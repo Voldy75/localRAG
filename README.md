@@ -131,9 +131,6 @@ curl -X POST -F "file=@path/to/your/document.txt" http://localhost:8000/upload
 
 ### 3. Querying the System
 
-<<<<<<< HEAD
-Once your documents are processed, you can use the OpenWebUI interface to query your documents directly:
-=======
 Once documents are processed, Run the required curl command for executing query from terminal: 
 ```bash
 curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d '{"question": "What is BBPS and what are its key features?", "temperature": 0.7}'
@@ -141,7 +138,6 @@ curl -X POST http://localhost:8000/query -H "Content-Type: application/json" -d 
 OR
 
 Alternatively, you can also leverage UI & use the OpenWebUI interface to query your documents:
->>>>>>> origin/master
 
 1. Open http://localhost:3000 in your browser
 2. Login with default credentials (if prompted)

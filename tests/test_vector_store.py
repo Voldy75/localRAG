@@ -44,21 +44,23 @@ class TestVectorStore(unittest.TestCase):
         self.assertIsNotNone(results)
         self.assertIn('documents', results)
         self.assertIn('distances', results)
-        self.assertEqual(len(results['documents']), min(len(docs), 5))  # Default top-k is 5    def test_similarity_threshold(self):
+        self.assertEqual(len(results['documents']), min(len(docs), 5))  # Default top-k is 5
+    def test_similarity_threshold(self):
         """Test similarity threshold filtering"""
-        # Create test documents with controlled similarity
-        base_vector = np.ones(384) / np.sqrt(384)  # Unit vector
-        
-        # Create a very similar vector (small noise)
-        similar_noise = np.random.rand(384) * 0.1
-        similar_vector = base_vector + similar_noise
-        similar_vector = similar_vector / np.linalg.norm(similar_vector)  # Normalize
-        
-        # Create a different vector (orthogonal to base_vector)
-        diff_vector = np.random.rand(384)
-        diff_vector = diff_vector - np.dot(diff_vector, base_vector) * base_vector  # Make orthogonal
-        diff_vector = diff_vector / np.linalg.norm(diff_vector)  # Normalize
-        
+        # Create a base vector (normalized)
+        base_vector = np.ones(384)
+        base_vector = base_vector / np.linalg.norm(base_vector)
+
+        # Create highly similar vector (cosine similarity > 0.8)
+        similar_vector = 0.95 * base_vector + 0.05 * np.random.rand(384)
+        similar_vector = similar_vector / np.linalg.norm(similar_vector)
+
+        # Create dissimilar vector (almost orthogonal, cosine similarity close to 0)
+        dissimilar_vector = np.random.rand(384)
+        # Make it more orthogonal to base_vector
+        dissimilar_vector = dissimilar_vector - np.dot(dissimilar_vector, base_vector) * base_vector
+        dissimilar_vector = dissimilar_vector / np.linalg.norm(dissimilar_vector)
+
         docs = [
             {
                 "content": "Similar document",
@@ -68,18 +70,24 @@ class TestVectorStore(unittest.TestCase):
             {
                 "content": "Different document",
                 "metadata": {"source": "different.txt"},
-                "embedding": diff_vector.tolist()
+                "embedding": dissimilar_vector.tolist()
             }
         ]
 
+        # Clear previous data and add new documents
+        self.vector_store.documents = []
+        self.vector_store.embeddings = []
+        self.vector_store.ids = []
         self.vector_store.add_documents(docs)
-        
+
         # Search with base_vector and high similarity threshold
-        results = self.vector_store.search(base_vector.tolist(), similarity_threshold=0.8)
-        
+        results = self.vector_store.search(
+            base_vector.tolist(),
+            similarity_threshold=0.8
+        )
+
         # Should only return the similar document
         self.assertEqual(len(results['documents']), 1)
-        self.assertEqual(results['documents'][0]['metadata']['source'], 'similar.txt')
         self.assertEqual(results['documents'][0]['metadata']['source'], 'similar.txt')
 
     def test_persistence(self):

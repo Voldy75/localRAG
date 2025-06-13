@@ -1,1 +1,0 @@
-RAG is a Retrieval Augmented Generation system

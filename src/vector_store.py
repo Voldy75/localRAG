@@ -37,46 +37,51 @@ class VectorStore:
     def add_documents(self, documents: List[Dict]):
         """Add documents and their embeddings to the vector store."""
         for doc in documents:
+            if 'embedding' not in doc:
+                raise ValueError("Document must contain an embedding")
+                
             self.documents.append({
                 'content': doc['content'],
                 'metadata': doc['metadata']
             })
             self.embeddings.append(np.array(doc['embedding']))
-            # Generate an ID if not provided
+            # Use provided ID or generate one
             doc_id = doc.get('id', str(len(self.ids)))
             self.ids.append(doc_id)
+            
         self._save_data()
-    
+
     def search(self, query_embedding: List[float], n_results: int = 5, similarity_threshold: float = 0.3):
         """Search for similar documents using the query embedding."""
         if not self.embeddings:
             return {'documents': [], 'distances': [], 'ids': []}
 
-        # Convert query embedding to numpy array
+        # Convert query embedding to numpy array and normalize
         query_vector = np.array(query_embedding)
+        query_norm = np.linalg.norm(query_vector)
+        if query_norm == 0:
+            return {'documents': [], 'distances': [], 'ids': []}
+        query_vector = query_vector / query_norm
         
         # Calculate cosine similarities
         similarities = []
         for doc_vector in self.embeddings:
-            # Normalize vectors
-            query_norm = np.linalg.norm(query_vector)
             doc_norm = np.linalg.norm(doc_vector)
-            
-            if query_norm == 0 or doc_norm == 0:
+            if doc_norm == 0:
                 similarities.append(0)
                 continue
-            
-            # Calculate cosine similarity
-            similarity = np.dot(query_vector, doc_vector) / (query_norm * doc_norm)
-            similarities.append(float(similarity))  # Convert to float for consistent comparison
+            normalized_doc = doc_vector / doc_norm
+            similarity = float(np.dot(query_vector, normalized_doc))
+            similarities.append(similarity)
         
         # Filter by threshold and get top N
         filtered_indices = [i for i, sim in enumerate(similarities) if sim >= similarity_threshold]
-        filtered_indices.sort(key=lambda i: similarities[i], reverse=True)
-        
         if not filtered_indices:
             return {'documents': [], 'distances': [], 'ids': []}
-            
+        
+        # Sort filtered indices by similarity (descending)
+        filtered_indices.sort(key=lambda i: similarities[i], reverse=True)
+        
         # Get top N results
         top_indices = filtered_indices[:n_results]
             

@@ -2,7 +2,6 @@ from langchain_community.llms import Ollama
 from typing import List
 import os
 import logging
-import requests
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,19 +22,24 @@ class LLMService:
 
     def _create_prompt(self, query: str, context: List[str]) -> str:
         """Create a prompt combining the context and query."""
-        context_str = "\n".join(context)
-        return f"""Based on the following context, answer the question.
+        context_str = "\n".join(context) if context else ""
+        return f"""Based on the following context, answer the question:
+
 Context:
 {context_str}
 
 Question: {query}
-Answer:"""
+Answer: """
 
     def generate_response(self, query: str, context: List[str], temperature: float = 0.7) -> str:
         """Generate a response using the LLM with provided context."""
+        if not isinstance(temperature, (int, float)) or not 0 <= temperature <= 1:
+            raise ValueError("Temperature must be a number between 0 and 1")
+
         try:
             prompt = self._create_prompt(query, context)
-            logger.info(f"Generating response for query with temperature {temperature}")
+            logger.info(f"Generating response with temperature {temperature}")
+            
             response = self.llm.invoke(
                 prompt,
                 temperature=temperature
