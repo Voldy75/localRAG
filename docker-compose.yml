@@ -11,34 +11,41 @@ services:
     environment:
       - OLLAMA_ORIGINS=http://localhost:3000,http://localhost:8000
       - OLLAMA_HOST=0.0.0.0
+    healthcheck:
+      test: ["CMD", "ollama", "-v"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   open-webui:
     container_name: open-webui
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:v0.6.15
     ports:
       - "3000:8080"
     environment:
-      - OLLAMA_API_BASE_URL=http://ollama:11434/api
+      - CORS_ALLOW_ORIGIN=*
+      - FORWARDED_ALLOW_IPS=*
+      - SCARF_NO_ANALYTICS=true
+      - DO_NOT_TRACK=true
+      - ANONYMIZED_TELEMETRY=false
       - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENAI_API_BASE_URL=http://rag-api:8000/v1
+      - OPENAI_API_KEY=dummy-key
+      - AUTOMATIC1111_BASE_URL=http://localhost:7860
+      - DEFAULT_MODEL=llama4
       - WEBUI_JWT_SECRET_KEY=your-secret-key
+      - WEBUI_SECRET_KEY=your-secret-key
       - API_HOST=0.0.0.0
       - APP_HOST=0.0.0.0
       - APP_PORT=8080
-      - API_PORT=8080
-      - OPENAI_API_KEY=dummy
-      - OPENAI_API_BASE=http://rag-api:8000/v1
-      - RAG_MODE=true
-      - LOG_LEVEL=debug
-      - WEBUI_SECRET_KEY=your-secret-key
-      - DEFAULT_MODEL=deepseek-r1
+      - MODEL_CONTEXT_SIZE=4096
     volumes:
       - webui_data:/app/backend/data
-      - ./documents:/app/backend/data/documents:ro
-      - ./rag_template.json:/app/backend/data/rag_template.json:ro
     depends_on:
-      - ollama
-      - rag-api
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
 
   rag-api:
@@ -50,8 +57,11 @@ services:
       - ./.vector_store:/app/vector_store
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
+      - MODEL_NAME=llama4
+      - CONTEXT_SIZE=4096
     depends_on:
-      - ollama
+      ollama:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
