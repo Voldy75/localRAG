@@ -23,6 +23,8 @@ RUN mkdir -p .vector_store
 
 # Set environment variables
 ENV PYTHONPATH=/app:/app/src
+ENV OLLAMA_BASE_URL=http://ollama:11434
+ENV MODEL_NAME=deepseek-coder:6.7b
 
 # Run the application
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

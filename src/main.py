@@ -41,9 +41,9 @@ class OpenAIRequest(BaseModel):
     temperature: Optional[float] = 0.7
 
 class OpenAIChoice(BaseModel):
-    message: Dict[str, str]
-    finish_reason: str = "stop"
+    message: dict
     index: int = 0
+    finish_reason: str = "stop"
 
 class OpenAIResponse(BaseModel):
     id: str
@@ -51,7 +51,7 @@ class OpenAIResponse(BaseModel):
     created: int
     model: str
     choices: List[OpenAIChoice]
-    usage: Dict[str, int]
+    usage: dict
 
 class Query(BaseModel):
     question: str
@@ -162,8 +162,16 @@ async def process_all_documents():
                 # Generate unique IDs for the documents
                 ids = [str(uuid.uuid4()) for _ in documents]
                 
-                # Store in vector database
-                vector_store.add_documents(documents, embeddings, ids)
+                # Combine documents, embeddings, and ids into a single list of dicts
+                doc_dicts = []
+                for doc, emb, doc_id in zip(documents, embeddings, ids):
+                    doc_dicts.append({
+                        'content': doc.page_content if hasattr(doc, 'page_content') else doc.get('content', ''),
+                        'metadata': doc.metadata if hasattr(doc, 'metadata') else doc.get('metadata', {}),
+                        'embedding': emb,
+                        'id': doc_id
+                    })
+                vector_store.add_documents(doc_dicts)
                 processed_files.append(filename)
             except Exception as e:
                 failed_files.append({"file": filename, "error": str(e)})
@@ -217,66 +225,75 @@ async def chat_completions(request: OpenAIRequest):
         
         if not user_message:
             raise HTTPException(status_code=400, detail="No user message found")
+
+        # Get system message if present
+        system_message = next(
+            (msg["content"] for msg in request.messages if msg["role"] == "system"),
+            "You are a helpful assistant that provides accurate answers based on the given context."
+        )
         
         # Create embedding for the query
         query_embedding = document_processor.create_embeddings([user_message])[0]
         
         # Search for relevant documents
-        results = vector_store.search(query_embedding)
+        results = vector_store.search(
+            query_embedding,
+            similarity_threshold=0.3,
+            n_results=5
+        )
         
+        # Generate response using LLM with relevant context
         if not results["documents"]:
-            response_text = "I don't have enough context to answer your question. Please try uploading relevant documents first."
+            response_text = "I don't have enough relevant information in my knowledge base to answer your question. Please try rephrasing or ask something else."
         else:
-            # Generate response using LLM with all relevant context
-            context = []
-            sources = set()
+            # Prepare context from relevant documents
+            context_items = []
+            sources = []
             
-            for doc in results["documents"]:
-                # Extract content and metadata
-                content = doc["content"]
-                metadata = doc.get("metadata", {})
-                source = metadata.get("source", "unknown source")
-                similarity = results["distances"][results["documents"].index(doc)]
-                
-                # Only include content above similarity threshold
-                if similarity >= 0.3:
-                    context.append(f"Content from {source}:\n{content}")
-                    sources.add(source)
+            for doc, similarity in zip(results["documents"], results["distances"]):
+                if similarity >= 0.3:  # Only include relevant content
+                    content = doc["content"].strip()
+                    metadata = doc.get("metadata", {})
+                    source = metadata.get("source", "unknown source")
+                    
+                    if content and source not in sources:
+                        context_items.append(content)
+                        sources.append(source)
+
+            context = "\n\n".join(context_items)
+
+            # Generate response
+            response_text = llm_service.generate_response(
+                query=user_message,
+                context=[context],
+                temperature=request.temperature or 0.7
+            )
             
-            if not context:
-                response_text = "I cannot find relevant information in the provided documents to answer your question."
-            else:
-                response_text = llm_service.generate_response(
-                    user_message,
-                    context,
-                    temperature=request.temperature or 0.7
-                )
-                
-                # Add source citations
-                if sources:
-                    response_text += f"\n\nSources: {', '.join(sources)}"
-        
-        # Add source citations
-        sources = [doc.get("metadata", {}).get("source") for doc in results["documents"]]
-        if sources:
-            response_text += f"\n\nSources: {', '.join(sources)}"
+            if sources:
+                source_list = ", ".join(sources)
+                if not response_text.endswith("."):
+                    response_text += "."
+                response_text += f"\n\nSources: {source_list}"
         
         return OpenAIResponse(
             id=str(uuid.uuid4()),
             created=int(datetime.now().timestamp()),
             model=request.model,
-            choices=[{
-                "message": {
+            choices=[OpenAIChoice(
+                message={
                     "role": "assistant",
                     "content": response_text
-                },
-                "finish_reason": "stop",
-                "index": 0
-            }],
-            usage={"total_tokens": 0}  # Placeholder as we don't track token usage
+                }
+            )],
+            usage={"total_tokens": 0}  # Token count not implemented
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
